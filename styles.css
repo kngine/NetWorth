@@ -126,11 +126,118 @@ body {
 }
 .btn-back:hover { color: #fafafa; background: #262626; }
 
-.current-actions {
+.new-save-area {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  padding: 20px;
+  background: #171717;
+  border: 1px solid #262626;
+  border-radius: 12px;
 }
+
+.save-label-prominent {
+  font-size: 0.875rem;
+  color: #a3a3a3;
+}
+
+.date-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.date-input-wrap .date-input {
+  flex: 1;
+}
+
+.date-picker-btn {
+  padding: 12px 16px;
+  font-size: 1.25rem;
+  background: #262626;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  color: #fafafa;
+  cursor: pointer;
+}
+.date-picker-btn:hover { background: #333; }
+
+.date-input-prominent {
+  padding: 14px 18px;
+  font-size: 1.125rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.btn-save-snapshot {
+  padding: 16px 24px;
+  font-size: 1.125rem;
+  background: #22c55e;
+  color: #0c0c0c;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.btn-save-snapshot:hover { opacity: 0.9; }
+
+.btn-add-subtle {
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  background: transparent;
+  color: #737373;
+  border: 1px dashed #404040;
+  align-self: center;
+}
+
+.btn-add-subtle:hover {
+  color: #a3a3a3;
+  border-color: #525252;
+}
+
+.snapshot-view-wrap { position: relative; }
+
+.snapshot-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.btn-edit {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  background: #262626;
+  color: #fafafa;
+  border: 1px solid #404040;
+}
+
+.btn-edit:hover { background: #333; }
+
+.btn-remove {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+}
+
+.btn-remove:hover { background: rgba(239, 68, 68, 0.15); }
+
+.btn-done {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  background: #22c55e;
+  color: #0c0c0c;
+}
+
+.snapshot-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.snapshot-detail-header .history-title { margin: 0; }
 
 .btn {
   padding: 12px 20px;
@@ -257,8 +364,8 @@ body {
 }
 
 .section-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -329,6 +436,22 @@ body {
   gap: 24px;
 }
 
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-export,
+.btn-import {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  background: #262626;
+  color: #fafafa;
+  border: 1px solid #404040;
+}
+.btn-export:hover,
+.btn-import:hover { background: #333; }
+
 .history-title {
   font-size: 1.125rem;
   font-weight: 600;
@@ -385,8 +508,8 @@ body {
 }
 
 .section-card-readonly .section-fields-readonly {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 

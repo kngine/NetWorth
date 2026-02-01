@@ -31,24 +31,30 @@
       </header>
       <main class="main">
         <div id="current-page" class="page-content">
-          <div id="current-snapshot" class="sections-list"></div>
+          <div id="current-snapshot-wrap" class="snapshot-view-wrap">
+            <div id="current-snapshot" class="sections-list"></div>
+          </div>
           <p id="current-empty" class="empty-state hidden">No snapshots yet. Go to New to add sections and save a snapshot.</p>
         </div>
         <div id="new-page" class="page-content hidden">
-          <div class="current-actions">
-            <button type="button" class="btn btn-primary" id="add-section">+ Add section</button>
-            <div class="save-row">
-              <label class="save-label">
-                Snapshot date
-                <input type="date" id="snapshot-date" class="date-input" />
-              </label>
-              <button type="button" class="btn btn-secondary" id="save-snapshot">Save snapshot</button>
+          <div class="new-save-area">
+            <label class="save-label save-label-prominent" for="snapshot-date">Snapshot date</label>
+            <div class="date-input-wrap">
+              <input type="date" id="snapshot-date" class="date-input date-input-prominent" />
+              <button type="button" class="date-picker-btn" id="snapshot-date-picker" title="Pick date" aria-label="Open calendar">📅</button>
             </div>
+            <button type="button" class="btn btn-save-snapshot" id="save-snapshot">Save snapshot</button>
           </div>
           <div id="sections-list" class="sections-list"></div>
+          <button type="button" class="btn btn-add-subtle" id="add-section">+ Add section</button>
         </div>
         <div id="history-page" class="page-content history-page hidden">
           <h2 class="history-title">Net worth over time</h2>
+          <div class="history-actions">
+            <button type="button" class="btn btn-export" id="export-btn">Export</button>
+            <button type="button" class="btn btn-import" id="import-btn">Import</button>
+            <input type="file" id="import-file" accept=".json,application/json" class="hidden" />
+          </div>
           <div id="chart-wrap" class="chart-wrap">
             <canvas id="chart"></canvas>
             <div id="chart-click-layer" class="chart-click-layer" aria-hidden="true"></div>
@@ -60,8 +66,15 @@
         </div>
         <div id="snapshot-detail-page" class="page-content hidden">
           <button type="button" class="btn btn-back" id="snapshot-back">← Back</button>
-          <h2 id="snapshot-detail-title" class="history-title"></h2>
+          <div class="snapshot-detail-header">
+            <h2 id="snapshot-detail-title" class="history-title"></h2>
+            <div class="snapshot-actions">
+              <button type="button" class="btn btn-edit" id="snapshot-detail-edit-btn">Edit</button>
+              <button type="button" class="btn btn-remove" id="snapshot-detail-remove-btn">Remove</button>
+            </div>
+          </div>
           <div id="snapshot-detail-content" class="sections-list"></div>
+          <div id="snapshot-detail-edit" class="sections-list hidden"></div>
         </div>
       </main>
     </div>

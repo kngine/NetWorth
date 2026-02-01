@@ -53,6 +53,45 @@ function saveSnapshots(snapshots) {
   localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snapshots));
 }
 
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sections: loadSections(),
+    snapshots: loadSnapshots(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `networth-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const secs = Array.isArray(data.sections) ? data.sections : [];
+      const snaps = Array.isArray(data.snapshots) ? data.snapshots : [];
+      saveSections(secs);
+      saveSnapshots(snaps);
+      sections.length = 0;
+      sections.push(...secs);
+      renderSections();
+      renderCurrentPage();
+      renderHistory();
+      renderTotal();
+      alert('Import complete.');
+    } catch (err) {
+      alert('Invalid file: ' + (err.message || 'Could not parse JSON'));
+    }
+  };
+  reader.readAsText(file);
+}
+
 function getPriceCache() {
   try {
     const raw = localStorage.getItem(PRICE_CACHE_KEY);
@@ -143,6 +182,18 @@ function getLatestSnapshot() {
 }
 
 function getDisplayTotal() {
+  if (currentEditSections && currentView.page === 'current') {
+    return currentEditSections.reduce((sum, s) => {
+      const debt = s.assetType === 'Real Estate' ? (s.debtDollars || 0) : 0;
+      return sum + (s.valueDollars - debt);
+    }, 0);
+  }
+  if (snapshotDetailEditSections && currentView.page === 'snapshot') {
+    return snapshotDetailEditSections.reduce((sum, s) => {
+      const debt = s.assetType === 'Real Estate' ? (s.debtDollars || 0) : 0;
+      return sum + (s.valueDollars - debt);
+    }, 0);
+  }
   if (currentView.page === 'current' || currentView.page === 'snapshot') {
     const snap = currentView.page === 'snapshot'
       ? loadSnapshots().find((s) => s.date === currentView.snapshotDate)
@@ -161,7 +212,8 @@ function renderTotal() {
 
 let currentView = { page: 'current', snapshotDate: null };
 
-function createSectionCard(section, onUpdate, onRemove) {
+function createSectionCard(section, onUpdate, onRemove, getSections) {
+  const getSecs = getSections || (() => sections);
   const isStock = section.assetType === 'Stock';
   const isRealEstate = section.assetType === 'Real Estate';
   const ticker = section.stockTicker || '';
@@ -225,7 +277,7 @@ function createSectionCard(section, onUpdate, onRemove) {
   `;
 
   function updateNet() {
-    const s = sections.find((x) => x.id === section.id);
+    const s = getSecs().find((x) => x.id === section.id);
     if (!s) return;
     const d = s.assetType === 'Real Estate' ? (s.debtDollars || 0) : 0;
     const n = s.valueDollars - d;
@@ -237,7 +289,7 @@ function createSectionCard(section, onUpdate, onRemove) {
   }
 
   async function refreshStockValue() {
-    const s = sections.find((x) => x.id === section.id);
+    const s = getSecs().find((x) => x.id === section.id);
     if (!s || s.assetType !== 'Stock') return;
     const t = (s.stockTicker || '').trim().toUpperCase();
     const sh = s.shares ?? 0;
@@ -348,7 +400,7 @@ function createReadOnlySectionCard(section) {
   card.className = 'section-card section-card-readonly';
   card.innerHTML = `
     <div class="section-header">
-      <span class="account-name-readonly">${escapeHtml(section.accountName || 'Unnamed')}</span>
+      <span class="account-name-readonly">${escapeHtml(section.accountName || '')}</span>
     </div>
     <div class="section-fields section-fields-readonly">
       <div class="field-readonly">
@@ -380,16 +432,21 @@ function createReadOnlySectionCard(section) {
   return card;
 }
 
+let currentEditSections = null;
+let snapshotDetailEditSections = null;
+
 function renderCurrentPage() {
   const snap = getLatestSnapshot();
+  const wrap = document.getElementById('current-snapshot-wrap');
   const container = document.getElementById('current-snapshot');
   const emptyEl = document.getElementById('current-empty');
   container.innerHTML = '';
+  currentEditSections = null;
   if (!snap || !snap.sections?.length) {
-    container.classList.add('hidden');
+    wrap.classList.add('hidden');
     emptyEl.classList.remove('hidden');
   } else {
-    container.classList.remove('hidden');
+    wrap.classList.remove('hidden');
     emptyEl.classList.add('hidden');
     snap.sections.forEach((s) => {
       container.appendChild(createReadOnlySectionCard(s));
@@ -397,17 +454,125 @@ function renderCurrentPage() {
   }
 }
 
+function enterCurrentEditMode(snap, sectionsToUse) {
+  currentEditSections = sectionsToUse
+    ? sectionsToUse
+    : JSON.parse(JSON.stringify(snap.sections || []));
+  const container = document.getElementById('current-snapshot');
+  const editContainer = document.getElementById('current-snapshot-edit');
+  const editBtn = document.getElementById('current-edit-btn');
+  container.classList.add('hidden');
+  editContainer.classList.remove('hidden');
+  editBtn.textContent = 'Done';
+  editBtn.onclick = () => doneCurrentEdit(snap.date);
+  renderEditableSnapshotSections(editContainer, currentEditSections, snap.date, true);
+}
+
+function doneCurrentEdit(date) {
+  if (currentEditSections) {
+    addSnapshot(currentEditSections, date);
+    currentEditSections = null;
+  }
+  renderCurrentPage();
+  renderTotal();
+}
+
+function removeCurrentSnapshot() {
+  const snap = getLatestSnapshot();
+  if (!snap || !confirm('Remove this snapshot?')) return;
+  const list = loadSnapshots().filter((s) => s.date !== snap.date);
+  saveSnapshots(list);
+  renderCurrentPage();
+  renderTotal();
+}
+
 function renderSnapshotDetail(date) {
   const snap = loadSnapshots().find((s) => s.date === date);
   const titleEl = document.getElementById('snapshot-detail-title');
   const contentEl = document.getElementById('snapshot-detail-content');
+  const editContainer = document.getElementById('snapshot-detail-edit');
+  const editBtn = document.getElementById('snapshot-detail-edit-btn');
+  const removeBtn = document.getElementById('snapshot-detail-remove-btn');
   contentEl.innerHTML = '';
+  editContainer.innerHTML = '';
+  editContainer.classList.add('hidden');
+  contentEl.classList.remove('hidden');
+  snapshotDetailEditSections = null;
   if (snap) {
     titleEl.textContent = formatDate(date) + ' — ' + formatCurrency(snap.totalNetWorth);
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = () => enterSnapshotDetailEditMode(snap);
+    removeBtn.onclick = () => removeSnapshotDetail(date);
     (snap.sections || []).forEach((s) => {
       contentEl.appendChild(createReadOnlySectionCard(s));
     });
   }
+}
+
+function enterSnapshotDetailEditMode(snap) {
+  snapshotDetailEditSections = JSON.parse(JSON.stringify(snap.sections || []));
+  const contentEl = document.getElementById('snapshot-detail-content');
+  const editContainer = document.getElementById('snapshot-detail-edit');
+  const editBtn = document.getElementById('snapshot-detail-edit-btn');
+  contentEl.classList.add('hidden');
+  editContainer.classList.remove('hidden');
+  editBtn.textContent = 'Done';
+  editBtn.onclick = () => doneSnapshotDetailEdit(snap.date);
+  renderEditableSnapshotSections(editContainer, snapshotDetailEditSections, snap.date, false);
+}
+
+function renderEditableSnapshotSections(container, secs, date, isCurrent) {
+  container.innerHTML = '';
+  secs.forEach((sec) => {
+    const onRemove = (id) => {
+      const idx = secs.findIndex((x) => x.id === id);
+      if (idx >= 0) secs.splice(idx, 1);
+      if (secs.length === 0) {
+        if (isCurrent) doneCurrentEdit(date);
+        else doneSnapshotDetailEdit(date);
+      } else {
+        renderEditableSnapshotSections(container, secs, date, isCurrent);
+      }
+    };
+    const card = createSectionCard(
+      sec,
+      (id, patch) => {
+        const s = secs.find((x) => x.id === id);
+        if (s) Object.assign(s, patch, { updatedAt: new Date().toISOString() });
+      },
+      onRemove,
+      () => secs
+    );
+    container.appendChild(card);
+  });
+}
+
+function doneSnapshotDetailEdit(date) {
+  if (snapshotDetailEditSections) {
+    addSnapshot(snapshotDetailEditSections, date);
+    snapshotDetailEditSections = null;
+  }
+  renderSnapshotDetail(date);
+  renderTotal();
+}
+
+function removeSnapshotDetail(date) {
+  if (!confirm('Remove this snapshot?')) return;
+  const list = loadSnapshots().filter((s) => s.date !== date);
+  saveSnapshots(list);
+  showPage('history');
+  renderTotal();
+}
+
+function goToSnapshotDetail(date) {
+  currentView = { page: 'snapshot', snapshotDate: date };
+  document.getElementById('current-page').classList.add('hidden');
+  document.getElementById('new-page').classList.add('hidden');
+  document.getElementById('history-page').classList.add('hidden');
+  document.getElementById('snapshot-detail-page').classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active'));
+  renderSnapshotDetail(date);
+  renderTotal();
 }
 
 function renderSections() {
@@ -585,8 +750,27 @@ document.getElementById('save-snapshot').addEventListener('click', () => {
 
 document.getElementById('snapshot-date').value = todayISO();
 
+document.getElementById('snapshot-date-picker')?.addEventListener('click', () => {
+  const input = document.getElementById('snapshot-date');
+  if (input?.showPicker) input.showPicker();
+  else input?.focus();
+});
+
 document.querySelectorAll('.nav-btn').forEach((btn) => {
   btn.addEventListener('click', () => showPage(btn.dataset.page));
+});
+
+document.getElementById('snapshot-back')?.addEventListener('click', () => showPage('history'));
+
+document.getElementById('export-btn')?.addEventListener('click', exportData);
+
+document.getElementById('import-btn')?.addEventListener('click', () => {
+  document.getElementById('import-file')?.click();
+});
+document.getElementById('import-file')?.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (file) importData(file);
+  e.target.value = '';
 });
 
 document.getElementById('api-key-btn').addEventListener('click', () => {
