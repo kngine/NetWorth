@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0c0c" />
+    <meta name="description" content="Track your net worth over time" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>NetWorth</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-row">
+          <h1 class="logo">NetWorth</h1>
+          <button type="button" class="btn-icon btn-settings" id="api-key-btn" title="Stock prices info">⚙</button>
+        </div>
+        <div class="total-row">
+          <span class="total-label">Total Net Worth</span>
+          <span id="total-value" class="total-value positive">$0</span>
+        </div>
+        <nav class="nav">
+          <button type="button" class="nav-btn active" data-page="current">Current</button>
+          <button type="button" class="nav-btn" data-page="new">New</button>
+          <button type="button" class="nav-btn" data-page="history">History</button>
+        </nav>
+      </header>
+      <main class="main">
+        <div id="current-page" class="page-content">
+          <div id="current-snapshot" class="sections-list"></div>
+          <p id="current-empty" class="empty-state hidden">No snapshots yet. Go to New to add sections and save a snapshot.</p>
+        </div>
+        <div id="new-page" class="page-content hidden">
+          <div class="current-actions">
+            <button type="button" class="btn btn-primary" id="add-section">+ Add section</button>
+            <div class="save-row">
+              <label class="save-label">
+                Snapshot date
+                <input type="date" id="snapshot-date" class="date-input" />
+              </label>
+              <button type="button" class="btn btn-secondary" id="save-snapshot">Save snapshot</button>
+            </div>
+          </div>
+          <div id="sections-list" class="sections-list"></div>
+        </div>
+        <div id="history-page" class="page-content history-page hidden">
+          <h2 class="history-title">Net worth over time</h2>
+          <div id="chart-wrap" class="chart-wrap">
+            <canvas id="chart"></canvas>
+            <div id="chart-click-layer" class="chart-click-layer" aria-hidden="true"></div>
+          </div>
+          <div id="history-list-wrap">
+            <ul id="snapshot-list" class="snapshot-list-ul"></ul>
+            <p id="history-empty" class="empty-state hidden">No history yet. Go to New to add sections and save a snapshot.</p>
+          </div>
+        </div>
+        <div id="snapshot-detail-page" class="page-content hidden">
+          <button type="button" class="btn btn-back" id="snapshot-back">← Back</button>
+          <h2 id="snapshot-detail-title" class="history-title"></h2>
+          <div id="snapshot-detail-content" class="sections-list"></div>
+        </div>
+      </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "NetWorth",
+  "short_name": "NetWorth",
+  "description": "Track your net worth over time",
+  "theme_color": "#0c0c0c",
+  "background_color": "#0c0c0c",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
