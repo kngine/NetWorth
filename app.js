@@ -101,10 +101,59 @@ function getPriceCache() {
   }
 }
 
-function setPriceCache(ticker, price) {
+function setPriceCache(ticker, price, dateKey) {
   const cache = getPriceCache();
-  cache[ticker.toUpperCase()] = { price, ts: Date.now() };
+  const key = dateKey ? `${ticker.toUpperCase()}_${dateKey}` : ticker.toUpperCase();
+  cache[key] = { price, ts: Date.now() };
   localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(cache));
+}
+
+async function fetchStockPriceForDate(ticker, dateStr) {
+  const key = (ticker || '').trim().toUpperCase();
+  if (!key) return { price: null, error: 'No ticker' };
+  const cache = getPriceCache();
+  const cacheKey = `${key}_${dateStr}`;
+  const cached = cache[cacheKey];
+  if (cached?.price != null) return { price: cached.price, error: null };
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const period1 = Math.floor(d.getTime() / 1000) - 86400 * 7;
+  const period2 = Math.floor(d.getTime() / 1000) + 86400;
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(key)}?period1=${period1}&period2=${period2}&interval=1d`;
+  async function tryFetch(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Fetch failed');
+    const data = await res.json();
+    const result = data.chart?.result?.[0];
+    if (!result) throw new Error('Invalid response');
+    const quote = result.indicators?.quote?.[0];
+    const timestamps = result.timestamp || [];
+    if (!quote?.close?.length || !timestamps.length) throw new Error('No price data');
+    const targetDate = dateStr.replace(/-/g, '');
+    let price = null;
+    for (let i = timestamps.length - 1; i >= 0; i--) {
+      const ts = new Date(timestamps[i] * 1000);
+      const ds = ts.toISOString().slice(0, 10).replace(/-/g, '');
+      if (ds <= targetDate && quote.close[i] != null) {
+        price = quote.close[i];
+        break;
+      }
+    }
+    if (price != null && typeof price === 'number') {
+      setPriceCache(key, price, dateStr);
+      return { price, error: null };
+    }
+    throw new Error('No price data for date');
+  }
+  try {
+    return await tryFetch(yahooUrl);
+  } catch (e) {
+    try {
+      const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl);
+      return await tryFetch(proxyUrl);
+    } catch (e2) {
+      return { price: null, error: e.message || 'Failed to fetch' };
+    }
+  }
 }
 
 async function fetchStockPrice(ticker) {
@@ -147,15 +196,26 @@ async function fetchStockPrice(ticker) {
   }
 }
 
-function addSnapshot(sections, snapshotDate) {
-  const total = sections.reduce((sum, s) => {
+async function addSnapshot(sections, snapshotDate) {
+  const secs = JSON.parse(JSON.stringify(sections));
+  for (const s of secs) {
+    if (s.assetType === 'Stock') {
+      const t = (s.stockTicker || '').trim().toUpperCase();
+      const sh = s.shares ?? 0;
+      if (t && sh) {
+        const { price } = await fetchStockPriceForDate(t, snapshotDate);
+        s.valueDollars = price != null ? price * sh : (s.valueDollars || 0);
+      }
+    }
+  }
+  const total = secs.reduce((sum, s) => {
     const debt = s.assetType === 'Real Estate' ? (s.debtDollars || 0) : 0;
     return sum + (s.valueDollars - debt);
   }, 0);
   const snapshot = {
     date: snapshotDate,
     totalNetWorth: total,
-    sections: JSON.parse(JSON.stringify(sections)),
+    sections: secs,
     savedAt: new Date().toISOString(),
   };
   const list = loadSnapshots();
@@ -212,7 +272,7 @@ function renderTotal() {
 
 let currentView = { page: 'current', snapshotDate: null };
 
-function createSectionCard(section, onUpdate, onRemove, getSections) {
+function createSectionCard(section, onUpdate, onRemove, getSections, snapshotDate) {
   const getSecs = getSections || (() => sections);
   const isStock = section.assetType === 'Stock';
   const isRealEstate = section.assetType === 'Real Estate';
@@ -250,6 +310,7 @@ function createSectionCard(section, onUpdate, onRemove, getSections) {
   const card = document.createElement('div');
   card.className = 'section-card';
   card.dataset.id = section.id;
+  if (snapshotDate) card.dataset.snapshotDate = snapshotDate;
   card.innerHTML = `
     <div class="section-header">
       <input type="text" class="account-name" placeholder="Name" value="${escapeHtml(section.accountName)}" data-field="accountName" />
@@ -299,6 +360,9 @@ function createSectionCard(section, onUpdate, onRemove, getSections) {
       renderTotal();
       return;
     }
+    const dateToUse = card.dataset.snapshotDate
+      || document.getElementById('snapshot-date')?.value
+      || todayISO();
     const displayEl = card.querySelector('.value-display');
     const loadingEl = card.querySelector('.value-loading');
     const refreshBtn = card.querySelector('.btn-refresh');
@@ -306,7 +370,7 @@ function createSectionCard(section, onUpdate, onRemove, getSections) {
     if (loadingEl) loadingEl.classList.remove('hidden');
     if (refreshBtn) refreshBtn.disabled = true;
 
-    const { price, error } = await fetchStockPrice(t);
+    const { price, error } = await fetchStockPriceForDate(t, dateToUse);
     if (displayEl) displayEl.classList.remove('hidden');
     if (loadingEl) loadingEl.classList.add('hidden');
     if (refreshBtn) refreshBtn.disabled = false;
@@ -315,7 +379,7 @@ function createSectionCard(section, onUpdate, onRemove, getSections) {
     onUpdate(section.id, { valueDollars: value });
     if (displayEl) {
       displayEl.textContent = error && price == null ? 'Error' : formatCurrency(value);
-      displayEl.title = price != null ? `$${price.toFixed(2)} × ${sh} shares` : (error || 'Loading…');
+      displayEl.title = price != null ? `$${price.toFixed(2)} × ${sh} shares (${dateToUse})` : (error || 'Loading…');
     }
     updateNet();
     renderTotal();
@@ -468,9 +532,9 @@ function enterCurrentEditMode(snap, sectionsToUse) {
   renderEditableSnapshotSections(editContainer, currentEditSections, snap.date, true);
 }
 
-function doneCurrentEdit(date) {
+async function doneCurrentEdit(date) {
   if (currentEditSections) {
-    addSnapshot(currentEditSections, date);
+    await addSnapshot(currentEditSections, date);
     currentEditSections = null;
   }
   renderCurrentPage();
@@ -541,15 +605,16 @@ function renderEditableSnapshotSections(container, secs, date, isCurrent) {
         if (s) Object.assign(s, patch, { updatedAt: new Date().toISOString() });
       },
       onRemove,
-      () => secs
+      () => secs,
+      date
     );
     container.appendChild(card);
   });
 }
 
-function doneSnapshotDetailEdit(date) {
+async function doneSnapshotDetailEdit(date) {
   if (snapshotDetailEditSections) {
-    addSnapshot(snapshotDetailEditSections, date);
+    await addSnapshot(snapshotDetailEditSections, date);
     snapshotDetailEditSections = null;
   }
   renderSnapshotDetail(date);
@@ -741,11 +806,22 @@ document.getElementById('add-section').addEventListener('click', () => {
   renderTotal();
 });
 
-document.getElementById('save-snapshot').addEventListener('click', () => {
+document.getElementById('save-snapshot').addEventListener('click', async () => {
+  const btn = document.getElementById('save-snapshot');
   const dateInput = document.getElementById('snapshot-date');
   const date = dateInput.value || todayISO();
-  addSnapshot(sections, date);
-  dateInput.value = todayISO();
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    await addSnapshot(sections, date);
+    dateInput.value = todayISO();
+    if (currentView.page === 'current') renderCurrentPage();
+    renderTotal();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 });
 
 document.getElementById('snapshot-date').value = todayISO();
