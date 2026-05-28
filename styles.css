@@ -239,6 +239,16 @@ body {
 
 .snapshot-detail-header .history-title { margin: 0; }
 
+.snapshot-edit-date-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #171717;
+  border: 1px solid #262626;
+  border-radius: 12px;
+}
+
 .btn {
   padding: 12px 20px;
   border-radius: 10px;
