@@ -562,13 +562,27 @@ function removeCurrentSnapshot() {
   renderTotal();
 }
 
+function getSnapshotDateEditElement() {
+  let el = document.getElementById('snapshot-detail-date-edit');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'snapshot-detail-date-edit';
+    const editContainer = document.getElementById('snapshot-detail-edit');
+    editContainer?.parentNode?.insertBefore(el, editContainer);
+  }
+  return el;
+}
+
 function renderSnapshotDetail(date) {
   const snap = loadSnapshots().find((s) => s.date === date);
   const titleEl = document.getElementById('snapshot-detail-title');
+  const dateEditEl = getSnapshotDateEditElement();
   const contentEl = document.getElementById('snapshot-detail-content');
   const editContainer = document.getElementById('snapshot-detail-edit');
   const editBtn = document.getElementById('snapshot-detail-edit-btn');
   const removeBtn = document.getElementById('snapshot-detail-remove-btn');
+  dateEditEl.innerHTML = '';
+  dateEditEl.classList.add('hidden');
   contentEl.innerHTML = '';
   editContainer.innerHTML = '';
   editContainer.classList.add('hidden');
@@ -590,9 +604,13 @@ function enterSnapshotDetailEditMode(snap) {
   snapshotDetailEditSections = JSON.parse(JSON.stringify(snap.sections || []));
   snapshotDetailEditDate = snap.date;
   const contentEl = document.getElementById('snapshot-detail-content');
+  const dateEditEl = getSnapshotDateEditElement();
   const editContainer = document.getElementById('snapshot-detail-edit');
   const editBtn = document.getElementById('snapshot-detail-edit-btn');
   contentEl.classList.add('hidden');
+  dateEditEl.innerHTML = '';
+  dateEditEl.appendChild(createSnapshotDateEditor(snap.date, false, editContainer));
+  dateEditEl.classList.remove('hidden');
   editContainer.classList.remove('hidden');
   editBtn.textContent = 'Done';
   editBtn.onclick = () => doneSnapshotDetailEdit(snap.date);
@@ -644,7 +662,9 @@ function createSnapshotDateEditor(date, isCurrent, container) {
 function renderEditableSnapshotSections(container, secs, date, isCurrent) {
   container.innerHTML = '';
   const editedDate = getEditedSnapshotDate(isCurrent, date);
-  container.appendChild(createSnapshotDateEditor(editedDate, isCurrent, container));
+  if (isCurrent) {
+    container.appendChild(createSnapshotDateEditor(editedDate, isCurrent, container));
+  }
   secs.forEach((sec) => {
     const onRemove = (id) => {
       const idx = secs.findIndex((x) => x.id === id);
