@@ -14,7 +14,12 @@ function formatCurrency(n) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('en-US', {
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const date = dateOnlyMatch
+    ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+    : new Date(iso);
+
+  return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -497,7 +502,9 @@ function createReadOnlySectionCard(section) {
 }
 
 let currentEditSections = null;
+let currentEditDate = null;
 let snapshotDetailEditSections = null;
+let snapshotDetailEditDate = null;
 
 function renderCurrentPage() {
   const snap = getLatestSnapshot();
@@ -506,6 +513,7 @@ function renderCurrentPage() {
   const emptyEl = document.getElementById('current-empty');
   container.innerHTML = '';
   currentEditSections = null;
+  currentEditDate = null;
   if (!snap || !snap.sections?.length) {
     wrap.classList.add('hidden');
     emptyEl.classList.remove('hidden');
@@ -522,6 +530,7 @@ function enterCurrentEditMode(snap, sectionsToUse) {
   currentEditSections = sectionsToUse
     ? sectionsToUse
     : JSON.parse(JSON.stringify(snap.sections || []));
+  currentEditDate = snap.date;
   const container = document.getElementById('current-snapshot');
   const editContainer = document.getElementById('current-snapshot-edit');
   const editBtn = document.getElementById('current-edit-btn');
@@ -534,10 +543,13 @@ function enterCurrentEditMode(snap, sectionsToUse) {
 
 async function doneCurrentEdit(date) {
   if (currentEditSections) {
-    await addSnapshot(currentEditSections, date);
+    const savedDate = await saveEditedSnapshot(currentEditSections, date, currentEditDate);
     currentEditSections = null;
+    currentEditDate = null;
+    currentView.snapshotDate = savedDate;
   }
   renderCurrentPage();
+  renderHistory();
   renderTotal();
 }
 
@@ -550,22 +562,39 @@ function removeCurrentSnapshot() {
   renderTotal();
 }
 
+function getSnapshotDateEditElement() {
+  let el = document.getElementById('snapshot-detail-date-edit');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'snapshot-detail-date-edit';
+    const editContainer = document.getElementById('snapshot-detail-edit');
+    editContainer?.parentNode?.insertBefore(el, editContainer);
+  }
+  return el;
+}
+
 function renderSnapshotDetail(date) {
   const snap = loadSnapshots().find((s) => s.date === date);
   const titleEl = document.getElementById('snapshot-detail-title');
+  const dateEditEl = getSnapshotDateEditElement();
   const contentEl = document.getElementById('snapshot-detail-content');
   const editContainer = document.getElementById('snapshot-detail-edit');
   const editBtn = document.getElementById('snapshot-detail-edit-btn');
+  const copyBtn = document.getElementById('snapshot-detail-copy-btn');
   const removeBtn = document.getElementById('snapshot-detail-remove-btn');
+  dateEditEl.innerHTML = '';
+  dateEditEl.classList.add('hidden');
   contentEl.innerHTML = '';
   editContainer.innerHTML = '';
   editContainer.classList.add('hidden');
   contentEl.classList.remove('hidden');
   snapshotDetailEditSections = null;
+  snapshotDetailEditDate = null;
   if (snap) {
     titleEl.textContent = formatDate(date) + ' — ' + formatCurrency(snap.totalNetWorth);
     editBtn.textContent = 'Edit';
     editBtn.onclick = () => enterSnapshotDetailEditMode(snap);
+    copyBtn.onclick = () => copySnapshotToNew(snap);
     removeBtn.onclick = () => removeSnapshotDetail(date);
     (snap.sections || []).forEach((s) => {
       contentEl.appendChild(createReadOnlySectionCard(s));
@@ -575,18 +604,69 @@ function renderSnapshotDetail(date) {
 
 function enterSnapshotDetailEditMode(snap) {
   snapshotDetailEditSections = JSON.parse(JSON.stringify(snap.sections || []));
+  snapshotDetailEditDate = snap.date;
   const contentEl = document.getElementById('snapshot-detail-content');
+  const dateEditEl = getSnapshotDateEditElement();
   const editContainer = document.getElementById('snapshot-detail-edit');
   const editBtn = document.getElementById('snapshot-detail-edit-btn');
   contentEl.classList.add('hidden');
+  dateEditEl.innerHTML = '';
+  dateEditEl.appendChild(createSnapshotDateEditor(snap.date, false, editContainer));
+  dateEditEl.classList.remove('hidden');
   editContainer.classList.remove('hidden');
   editBtn.textContent = 'Done';
   editBtn.onclick = () => doneSnapshotDetailEdit(snap.date);
   renderEditableSnapshotSections(editContainer, snapshotDetailEditSections, snap.date, false);
 }
 
+function getEditedSnapshotDate(isCurrent, fallbackDate) {
+  return (isCurrent ? currentEditDate : snapshotDetailEditDate) || fallbackDate || todayISO();
+}
+
+function setEditedSnapshotDate(isCurrent, date) {
+  if (isCurrent) currentEditDate = date;
+  else snapshotDetailEditDate = date;
+}
+
+async function saveEditedSnapshot(sections, originalDate, editedDate) {
+  const snapshotDate = editedDate || originalDate || todayISO();
+  if (originalDate && snapshotDate !== originalDate) {
+    saveSnapshots(loadSnapshots().filter((s) => s.date !== originalDate));
+  }
+  await addSnapshot(sections, snapshotDate);
+  return snapshotDate;
+}
+
+function createSnapshotDateEditor(date, isCurrent, container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'snapshot-edit-date-card';
+  wrap.innerHTML = `
+    <label class="save-label save-label-prominent" for="${isCurrent ? 'current-edit-date' : 'snapshot-detail-edit-date'}">Snapshot date</label>
+    <div class="date-input-wrap">
+      <input type="date" id="${isCurrent ? 'current-edit-date' : 'snapshot-detail-edit-date'}" class="date-input date-input-prominent" value="${escapeHtml(date)}" />
+    </div>
+  `;
+
+  const input = wrap.querySelector('input');
+  const syncDate = () => {
+    const nextDate = input.value || date;
+    setEditedSnapshotDate(isCurrent, nextDate);
+    container.querySelectorAll('.section-card[data-id]').forEach((card) => {
+      card.dataset.snapshotDate = nextDate;
+    });
+  };
+  input.addEventListener('input', syncDate);
+  input.addEventListener('change', syncDate);
+
+  return wrap;
+}
+
 function renderEditableSnapshotSections(container, secs, date, isCurrent) {
   container.innerHTML = '';
+  const editedDate = getEditedSnapshotDate(isCurrent, date);
+  if (isCurrent) {
+    container.appendChild(createSnapshotDateEditor(editedDate, isCurrent, container));
+  }
   secs.forEach((sec) => {
     const onRemove = (id) => {
       const idx = secs.findIndex((x) => x.id === id);
@@ -606,19 +686,41 @@ function renderEditableSnapshotSections(container, secs, date, isCurrent) {
       },
       onRemove,
       () => secs,
-      date
+      getEditedSnapshotDate(isCurrent, date)
     );
     container.appendChild(card);
   });
 }
 
 async function doneSnapshotDetailEdit(date) {
+  let savedDate = date;
   if (snapshotDetailEditSections) {
-    await addSnapshot(snapshotDetailEditSections, date);
+    savedDate = await saveEditedSnapshot(snapshotDetailEditSections, date, snapshotDetailEditDate);
     snapshotDetailEditSections = null;
+    snapshotDetailEditDate = null;
   }
-  renderSnapshotDetail(date);
+  currentView.snapshotDate = savedDate;
+  renderSnapshotDetail(savedDate);
+  renderHistory();
   renderTotal();
+}
+
+function copySectionForNewPage(section) {
+  return {
+    ...JSON.parse(JSON.stringify(section)),
+    id: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function copySnapshotToNew(snap) {
+  sections = (snap.sections || []).map(copySectionForNewPage);
+  saveSections(sections);
+
+  const dateInput = document.getElementById('snapshot-date');
+  if (dateInput) dateInput.value = todayISO();
+
+  showPage('new');
 }
 
 function removeSnapshotDetail(date) {
