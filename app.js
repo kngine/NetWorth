@@ -580,6 +580,7 @@ function renderSnapshotDetail(date) {
   const contentEl = document.getElementById('snapshot-detail-content');
   const editContainer = document.getElementById('snapshot-detail-edit');
   const editBtn = document.getElementById('snapshot-detail-edit-btn');
+  const copyBtn = document.getElementById('snapshot-detail-copy-btn');
   const removeBtn = document.getElementById('snapshot-detail-remove-btn');
   dateEditEl.innerHTML = '';
   dateEditEl.classList.add('hidden');
@@ -593,6 +594,7 @@ function renderSnapshotDetail(date) {
     titleEl.textContent = formatDate(date) + ' — ' + formatCurrency(snap.totalNetWorth);
     editBtn.textContent = 'Edit';
     editBtn.onclick = () => enterSnapshotDetailEditMode(snap);
+    copyBtn.onclick = () => copySnapshotToNew(snap);
     removeBtn.onclick = () => removeSnapshotDetail(date);
     (snap.sections || []).forEach((s) => {
       contentEl.appendChild(createReadOnlySectionCard(s));
@@ -701,6 +703,24 @@ async function doneSnapshotDetailEdit(date) {
   renderSnapshotDetail(savedDate);
   renderHistory();
   renderTotal();
+}
+
+function copySectionForNewPage(section) {
+  return {
+    ...JSON.parse(JSON.stringify(section)),
+    id: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function copySnapshotToNew(snap) {
+  sections = (snap.sections || []).map(copySectionForNewPage);
+  saveSections(sections);
+
+  const dateInput = document.getElementById('snapshot-date');
+  if (dateInput) dateInput.value = todayISO();
+
+  showPage('new');
 }
 
 function removeSnapshotDetail(date) {
